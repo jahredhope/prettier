@@ -5,7 +5,7 @@
 const minimist = require("minimist");
 const prettier = eval("require")("../index");
 
-const CLIEngine = require("../src/cli");
+const CLIEngine = require("../src/cli-engine");
 
 const argv = minimist(process.argv.slice(2), {
   boolean: [
