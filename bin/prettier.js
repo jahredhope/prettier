@@ -5,7 +5,7 @@
 const minimist = require("minimist");
 const prettier = eval("require")("../index");
 
-const cli = require("../src/cli");
+const CLIEngine = require("../src/cli");
 
 const argv = minimist(process.argv.slice(2), {
   boolean: [
@@ -60,9 +60,9 @@ if (argv["version"]) {
   process.exit(0);
 }
 
-const filepatterns = argv["_"];
+const filePatterns = argv["_"];
 const write = argv["write"];
-const stdin = argv["stdin"] || (!filepatterns.length && !process.stdin.isTTY);
+const stdin = argv["stdin"] || (!filePatterns.length && !process.stdin.isTTY);
 const debugPrintDoc = argv["debug-print-doc"];
 const debugCheck = argv["debug-check"];
 const listDifferent = argv["list-different"];
@@ -141,7 +141,7 @@ const options = {
   parser: getParserOption()
 };
 
-if (argv["help"] || (!filepatterns.length && !stdin)) {
+if (argv["help"] || (!filePatterns.length && !stdin)) {
   console.log(
     "Usage: prettier [opts] [filename ...]\n\n" +
       "Available options:\n" +
@@ -178,15 +178,14 @@ if (argv["help"] || (!filepatterns.length && !stdin)) {
   process.exit(argv["help"] ? 0 : 1);
 }
 
-cli(
-  {
-    debugCheck,
-    debugPrintDoc,
-    filepatterns,
-    ignoreNodeModules,
-    listDifferent,
-    stdin,
-    write
-  },
-  options
-);
+const cli = new CLIEngine({
+  debugCheck,
+  debugPrintDoc,
+  filePatterns,
+  ignoreNodeModules,
+  listDifferent,
+  stdin,
+  write
+});
+
+cli.execute(options);
