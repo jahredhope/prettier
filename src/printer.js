@@ -153,10 +153,10 @@ function genericPrint(path, options, printPath, args) {
     path.each(
       decoratorPath => {
         const decorator = decoratorPath.getValue();
-        const prefix = decorator.type === "Decorator" ||
-          decorator.type === "TSDecorator"
-          ? ""
-          : "@";
+        const prefix =
+          decorator.type === "Decorator" || decorator.type === "TSDecorator"
+            ? ""
+            : "@";
         decorators.push(prefix, printPath(decoratorPath), hardline);
       },
       "declaration",
@@ -454,7 +454,6 @@ function genericPrintNoParens(path, options, print, args) {
       parts.push(" =>");
 
       const body = path.call(bodyPath => print(bodyPath, args), "body");
-      const collapsed = concat([concat(parts), " ", body]);
 
       // We want to always keep these types of nodes on the same line
       // as the arrow.
@@ -463,11 +462,23 @@ function genericPrintNoParens(path, options, print, args) {
         (n.body.type === "ArrayExpression" ||
           n.body.type === "ObjectExpression" ||
           n.body.type === "BlockStatement" ||
-          n.body.type === "SequenceExpression" ||
           isTemplateOnItsOwnLine(n.body, options.originalText) ||
           n.body.type === "ArrowFunctionExpression")
       ) {
-        return group(collapsed);
+        return group(concat([concat(parts), " ", body]));
+      }
+
+      // We handle sequence expressions as the body of arrows specially,
+      // so that the required parentheses end up on their own lines.
+      if (n.body.type === "SequenceExpression") {
+        return group(
+          concat([
+            concat(parts),
+            group(
+              concat([" (", indent(concat([softline, body])), softline, ")"])
+            )
+          ])
+        );
       }
 
       // if the arrow function is expanded as last argument, we are adding a
@@ -779,7 +790,8 @@ function genericPrintNoParens(path, options, print, args) {
           );
         } else if (
           n.argument.type === "LogicalExpression" ||
-          n.argument.type === "BinaryExpression"
+          n.argument.type === "BinaryExpression" ||
+          n.argument.type === "SequenceExpression"
         ) {
           parts.push(
             group(
@@ -897,10 +909,10 @@ function genericPrintNoParens(path, options, print, args) {
             util.locStart(n),
             util.locEnd(n)
           ));
-      const separator = n.type === "TSInterfaceBody" ||
-        n.type === "TSTypeLiteral"
-        ? ifBreak(semi, ";")
-        : ",";
+      const separator =
+        n.type === "TSInterfaceBody" || n.type === "TSTypeLiteral"
+          ? ifBreak(semi, ";")
+          : ",";
       const fields = [];
       const leftBrace = n.exact ? "{|" : "{";
       const rightBrace = n.exact ? "|}" : "}";
@@ -975,7 +987,7 @@ function genericPrintNoParens(path, options, print, args) {
           ),
           ifBreak(
             canHaveTrailingSeparator &&
-              (separator !== "," || shouldPrintComma(options))
+            (separator !== "," || shouldPrintComma(options))
               ? separator
               : ""
           ),
@@ -1101,8 +1113,8 @@ function genericPrintNoParens(path, options, print, args) {
               needsForcedTrailingComma ? "," : "",
               ifBreak(
                 canHaveTrailingComma &&
-                  !needsForcedTrailingComma &&
-                  shouldPrintComma(options)
+                !needsForcedTrailingComma &&
+                shouldPrintComma(options)
                   ? ","
                   : ""
               ),
@@ -1124,25 +1136,26 @@ function genericPrintNoParens(path, options, print, args) {
 
       return concat(parts);
     case "SequenceExpression": {
-      const parent = path.getParentNode();
-      const shouldInline =
-        parent.type === "ReturnStatement" ||
-        parent.type === "ForStatement" ||
-        parent.type === "ExpressionStatement";
-
-      if (shouldInline) {
-        return join(", ", path.map(print, "expressions"));
+      const parent = path.getParentNode(0);
+      if (
+        parent.type === "ExpressionStatement" ||
+        parent.type === "ForStatement"
+      ) {
+        // For ExpressionStatements and for-loop heads, which are among
+        // the few places a SequenceExpression appears unparenthesized, we want
+        // to indent expressions after the first.
+        const parts = [];
+        path.each(p => {
+          if (p.getName() === 0) {
+            parts.push(print(p));
+          } else {
+            parts.push(",", indent(concat([line, print(p)])));
+          }
+        }, "expressions");
+        return group(concat(parts));
       }
       return group(
-        concat([
-          indent(
-            concat([
-              softline,
-              join(concat([",", line]), path.map(print, "expressions"))
-            ])
-          ),
-          softline
-        ])
+        concat([join(concat([",", line]), path.map(print, "expressions"))])
       );
     }
     case "ThisExpression":
@@ -1527,7 +1540,7 @@ function genericPrintNoParens(path, options, print, args) {
                     return concat([
                       casePath.call(print),
                       n.cases.indexOf(caseNode) !== n.cases.length - 1 &&
-                        util.isNextLineEmpty(options.originalText, caseNode)
+                      util.isNextLineEmpty(options.originalText, caseNode)
                         ? hardline
                         : ""
                     ]);
@@ -2781,6 +2794,8 @@ function couldGroupArg(arg) {
   return (
     (arg.type === "ObjectExpression" && arg.properties.length > 0) ||
     (arg.type === "ArrayExpression" && arg.elements.length > 0) ||
+    arg.type === "TSTypeAssertionExpression" ||
+    arg.type === "TSAsExpression" ||
     arg.type === "FunctionExpression" ||
     (arg.type === "ArrowFunctionExpression" &&
       (arg.body.type === "BlockStatement" ||
@@ -2831,6 +2846,7 @@ function printArgumentsList(path, options, print) {
   }
 
   const args = path.getValue().arguments;
+
   // This is just an optimization; I think we could return the
   // conditional group for all function calls, but it's more expensive
   // so only do it for specific forms.
@@ -3026,6 +3042,7 @@ function printFunctionParams(path, print, options, expandArg, printTypeParams) {
     fun[paramsField].length === 1 &&
     fun[paramsField][0].name === null &&
     fun[paramsField][0].typeAnnotation &&
+    fun.typeParameters === null &&
     flowTypeAnnotations.indexOf(fun[paramsField][0].typeAnnotation.type) !==
       -1 &&
     !(
@@ -3194,7 +3211,7 @@ function printExportDeclaration(path, options, print) {
         const defaultSpecifiers = [];
         const namespaceSpecifiers = [];
 
-        path.map(specifierPath => {
+        path.each(specifierPath => {
           const specifierType = path.getValue().type;
           if (specifierType === "ExportSpecifier") {
             specifiers.push(print(specifierPath));
@@ -4075,11 +4092,7 @@ function printBinaryishExpressions(
     // precedence level and should be treated as a separate group, so
     // print them normally. (This doesn't hold for the `**` operator,
     // which is unique in that it is right-associative.)
-    if (
-      util.getPrecedence(node.left.operator) ===
-        util.getPrecedence(node.operator) &&
-      node.operator !== "**"
-    ) {
+    if (util.shouldFlatten(node.operator, node.left.operator)) {
       // Flatten them out by recursively calling this function.
       parts = parts.concat(
         path.call(
@@ -4220,9 +4233,10 @@ function nodeStr(node, options, isFlowOrTypeScriptDirectiveLiteral) {
     canChangeDirectiveQuotes = true;
   }
 
-  const enclosingQuote = options.parser === "json"
-    ? double.quote
-    : shouldUseAlternateQuote ? alternate.quote : preferred.quote;
+  const enclosingQuote =
+    options.parser === "json"
+      ? double.quote
+      : shouldUseAlternateQuote ? alternate.quote : preferred.quote;
 
   // Directives are exact code unit sequences, which means that you can't
   // change the escape sequences they use.

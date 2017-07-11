@@ -185,7 +185,8 @@ FastPath.prototype.needsParens = function(options) {
 
   if (
     (parent.type === "ArrowFunctionExpression" &&
-      parent.body === node &&
+    parent.body === node &&
+    node.type !== "SequenceExpression" && // these have parens added anyway
       startsWithNoLookaheadToken(node, /* forbidFunctionAndClass */ false)) ||
     (parent.type === "ExpressionStatement" &&
       startsWithNoLookaheadToken(node, /* forbidFunctionAndClass */ true))
@@ -304,7 +305,7 @@ FastPath.prototype.needsParens = function(options) {
 
         case "BinaryExpression":
         case "LogicalExpression": {
-          if (!node.operator) {
+          if (!node.operator && node.type !== "TSTypeAssertionExpression") {
             return true;
           }
 
@@ -313,16 +314,12 @@ FastPath.prototype.needsParens = function(options) {
           const no = node.operator;
           const np = util.getPrecedence(no);
 
-          if (po === "||" && no === "&&") {
-            return true;
-          }
-
           if (pp > np) {
             return true;
           }
 
-          if (no === "**" && po === "**") {
-            return name === "left";
+          if (po === "||" && no === "&&") {
+            return true;
           }
 
           if (pp === np && name === "right") {
@@ -330,9 +327,13 @@ FastPath.prototype.needsParens = function(options) {
             return true;
           }
 
+          if (pp === np && !util.shouldFlatten(po, no)) {
+            return true;
+          }
+
           // Add parenthesis when working with binary operators
           // It's not stricly needed but helps with code understanding
-          if (["|", "^", "&", ">>", "<<", ">>>"].indexOf(po) !== -1) {
+          if (util.isBitwiseOperator(po)) {
             return true;
           }
 
@@ -375,6 +376,11 @@ FastPath.prototype.needsParens = function(options) {
 
         case "ExpressionStatement":
           return name !== "expression";
+
+        case "ArrowFunctionExpression":
+          // We do need parentheses, but SequenceExpressions are handled
+          // specially when printing bodies of arrow functions.
+          return name !== "body";
 
         default:
           // Otherwise err on the side of overparenthesization, adding

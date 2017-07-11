@@ -315,6 +315,67 @@ function getPrecedence(op) {
   return PRECEDENCE[op];
 }
 
+const equalityOperators = {
+  "==": true,
+  "!=": true,
+  "===": true,
+  "!==": true
+};
+const multiplicativeOperators = {
+  "*": true,
+  "/": true,
+  "%": true
+};
+const bitwiseOperators = {
+  ">>": true,
+  ">>>": true,
+  "<<": true,
+  "|": true,
+  "^": true,
+  "&": true
+};
+
+function shouldFlatten(parentOp, nodeOp) {
+  if (getPrecedence(nodeOp) !== getPrecedence(parentOp)) {
+    return false;
+  }
+
+  // ** is right-associative
+  // x ** y ** z --> x ** (y ** z)
+  if (parentOp === "**") {
+    return false;
+  }
+
+  // x == y == z --> (x == y) == z
+  if (equalityOperators[parentOp] && equalityOperators[nodeOp]) {
+    return false;
+  }
+
+  // x * y % z --> (x * y) % z
+  if (
+    (nodeOp === "%" && multiplicativeOperators[parentOp]) ||
+    (parentOp === "%" && multiplicativeOperators[nodeOp])
+  ) {
+    return false;
+  }
+
+  // x << y << z --> (x << y) << z
+  if (
+    bitwiseOperators[parentOp] &&
+    bitwiseOperators[nodeOp] &&
+    // Flatten x | y | z
+    (nodeOp !== "|" || parentOp !== "|")
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isBitwiseOperator(operator) {
+  return !!bitwiseOperators[operator];
+}
+
 // Tests if an expression starts with `{`, or (if forbidFunctionAndClass holds) `function` or `class`.
 // Will be overzealous if there's already necessary grouping parentheses.
 function startsWithNoLookaheadToken(node, forbidFunctionAndClass) {
@@ -405,6 +466,8 @@ function getAlignmentSize(value, tabWidth, startIndex) {
 
 module.exports = {
   getPrecedence,
+  shouldFlatten,
+  isBitwiseOperator,
   isExportDeclaration,
   getParentExportDeclaration,
   getPenultimate,

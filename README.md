@@ -186,7 +186,7 @@ Linters have two categories of rules:
 
 **Formatting rules**: eg: [max-len](http://eslint.org/docs/rules/max-len), [no-mixed-spaces-and-tabs](http://eslint.org/docs/rules/no-mixed-spaces-and-tabs), [keyword-spacing](http://eslint.org/docs/rules/keyword-spacing), [comma-style](http://eslint.org/docs/rules/comma-style)...
 
-Prettier makes this whole category of rules not needed anymore! Prettier is going to reprint the entire program from scratch in a consistent way, so it's not possible for the programmer to make a mistake there anymore :)
+Prettier alleviates the need for this whole category of rules! Prettier is going to reprint the entire program from scratch in a consistent way, so it's not possible for the programmer to make a mistake there anymore :)
 
 **Code-quality rules**: eg [no-unused-vars](http://eslint.org/docs/rules/no-unused-vars), [no-extra-bind](http://eslint.org/docs/rules/no-extra-bind), [no-implicit-globals](http://eslint.org/docs/rules/no-implicit-globals), [prefer-promise-reject-errors](http://eslint.org/docs/rules/prefer-promise-reject-errors)...
 
@@ -318,19 +318,18 @@ See https://github.com/okonet/lint-staged#configuration for more details about h
 
 ##### Option 2. [pre-commit](https://github.com/pre-commit/pre-commit)
 
-Copy the following config in your pre-commit config yaml file:
+Copy the following config into your `.pre-commit-config.yaml` file:
 
 ```yaml
 
-    -   repo: https://github.com/awebdeveloper/pre-commit-prettier
+    -   repo: https://github.com/prettier/prettier
         sha: ''  # Use the sha or tag you want to point at
         hooks:
         -   id: prettier
-            additional_dependencies: ['prettier@1.4.2']
 
- ```
+```
 
-Find more info from [here](https://github.com/awebdeveloper/pre-commit-prettier).
+Find more info from [here](http://pre-commit.com).
 
 ##### Option 3. bash script
 
@@ -341,14 +340,13 @@ Alternately you can save this script as `.git/hooks/pre-commit` and give it exec
 jsfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.jsx\?$' | tr '\n' ' ')
 [ -z "$jsfiles" ] && exit 0
 
-diffs=$(node_modules/.bin/prettier -l $jsfiles)
-[ -z "$diffs" ] && exit 0
+# Prettify all staged .js files
+echo "$jsfiles" | xargs ./node_modules/.bin/prettier --write
 
-echo "here"
-echo >&2 "Javascript files must be formatted with Prettier. Please run:"
-echo >&2 "node_modules/.bin/prettier --write "$diffs""
+# Add back the modified/prettified files to staging
+echo "$jsfiles" | xargs git add
 
-exit 1
+exit 0
 ```
 
 ### API
@@ -445,11 +443,13 @@ matrix(
 Prettier ships with a handful of customizable format options, usable in both the CLI and API.
 
 ### Print Width
-Specify the length of line that the printer will wrap on.
+Specify the line length that the printer will wrap on.
 
-**We strongly recommend against using more than 80 columns.**
-
-Prettier works by cramming as much content as possible until it reaches the limit, which happens to work well for 80 columns but makes lines that are very crowded. When a bigger column count is used in styleguides, it usually means that code is allowed to go beyond 80 columns, but not to make every single line go there, like Prettier would do.
+> **For readability we recommend against using more than 80 characters:**
+>
+>In code styleguides, maximum line length rules are often set to 100 or 120. However, when humans write code, they don't strive to reach the maximum number of columns on every line. Developers often use whitespace to break up long lines for readability. In practice, the average line length often ends up well below the maximum.
+> 
+> Prettier, on the other hand, strives to fit the most code into every line. With the print width set to 120, prettier may produce overly compact, or otherwise undesirable code.
 
 Default | CLI Override | API Override
 --------|--------------|-------------
@@ -636,7 +636,7 @@ passes `prettier` output to `standard --fix`
 - [`prettier-miscellaneous`](https://github.com/arijs/prettier-miscellaneous)
 `prettier` with a few minor extra options
 - [`neutrino-preset-prettier`](https://github.com/SpencerCDixon/neutrino-preset-prettier) allows you to use Prettier as a Neutrino preset
-- [`prettier_d`](https://github.com/josephfrazier/prettier_d.js) runs Prettier as a server to avoid Node.js startup delay
+- [`prettier_d`](https://github.com/josephfrazier/prettier_d.js) runs Prettier as a server to avoid Node.js startup delay. It also supports configuration via `.prettierrc`, `package.json`, and `.editorconfig`.
 - [`Prettier Bookmarklet`](https://prettier.glitch.me/) provides a bookmarklet and exposes a REST API for Prettier that allows to format CodeMirror editor in your browser
 - [`prettier-github`](https://github.com/jgierer12/prettier-github) formats code in GitHub comments
 
